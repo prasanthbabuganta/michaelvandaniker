@@ -269,7 +269,7 @@ package com.michaelvandaniker.display
 	            	var point:Point = transformationFunction.apply(this,[o]);
 	            	if(rect.containsPoint(point))
 	            	{
-	            		var pointCount:Number = weightFunction.apply(this,[0]);
+	            		var pointCount:Number = weightFunction.apply(this,[o]);
 	            		for(var a:int = 0; a < pointCount; a++)
 	            		{
 	            			tempPoints.push(point);
