@@ -1,0 +1,4 @@
+<?xml version="1.0"?>
+<componentPackage>
+    <component id="HeatMap" class="com.michaelvandaniker.display.HeatMap" />
+</componentPackage>
