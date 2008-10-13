@@ -1,4 +1,4 @@
-package com.michaelvandaniker.display
+package com.michaelvandaniker.visualization
 {
     import flash.display.BitmapData;
     import flash.display.BlendMode;

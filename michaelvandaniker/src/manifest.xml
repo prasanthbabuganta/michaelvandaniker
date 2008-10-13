@@ -1,4 +1,7 @@
 <?xml version="1.0"?>
 <componentPackage>
-    <component id="HeatMap" class="com.michaelvandaniker.display.HeatMap" />
+    <component id="HeatMap" class="com.michaelvandaniker.visualization.HeatMap" />
+    <component id="ParallelCoordinatePlot" class="com.michaelvandaniker.visualization.ParallelCoordinatePlot" />
+   	<component id="ParallelCoordinateAxis" class="com.michaelvandaniker.visualization.ParallelCoordinateAxis" />
+   	<component id="ParallelCoordinateAxisRenderer" class="com.michaelvandaniker.visualization.ParallelCoordinateAxisRenderer" />
 </componentPackage>
