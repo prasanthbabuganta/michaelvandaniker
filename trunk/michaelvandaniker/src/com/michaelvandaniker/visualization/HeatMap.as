@@ -4,6 +4,8 @@ package com.michaelvandaniker.visualization
     import flash.display.BlendMode;
     import flash.display.GradientType;
     import flash.display.Shape;
+    import flash.events.Event;
+    import flash.events.MouseEvent;
     import flash.filters.BlurFilter;
     import flash.geom.Matrix;
     import flash.geom.Point;
@@ -12,6 +14,8 @@ package com.michaelvandaniker.visualization
     import mx.collections.ArrayCollection;
     import mx.core.UIComponent;
     import mx.events.CollectionEvent;
+    import mx.styles.CSSStyleDeclaration;
+    import mx.styles.StyleManager;
 
 	[Style(name="backgroundColor", type="uint", format="Color", inherit="no")]
 	[Style(name="backgroundAlpha", type="Number", inherit="no")]
@@ -30,6 +34,24 @@ package com.michaelvandaniker.visualization
 			cacheAsBitmap = true;
 			gradientArray = GradientDictionary.THERMAL;
 		}
+		
+		/**
+		 * Initialize the backgroundAlpha and backgroundColor styles
+		 */
+		private static function initializeStyles():void
+		{
+			if (!StyleManager.getStyleDeclaration("HeatMap"))
+            {
+                var defaultStyles:CSSStyleDeclaration = new CSSStyleDeclaration();
+                defaultStyles.defaultFactory = function():void
+                {
+                    this.backgroundAlpha = 0;
+                    this.backgroundColor = 0;
+                }
+                StyleManager.setStyleDeclaration("HeatMap", defaultStyles, true);
+            }
+		}
+		initializeStyles();
 		
 		/**
 		 * A few BitmapData operations take a Point as an argument.
@@ -229,17 +251,14 @@ package com.michaelvandaniker.visualization
             }
             
             drawHeatMap();           
-			graphics.clear();
+			
 			var bgColor:Number = getStyle("backgroundColor");
-			if(!isNaN(bgColor))
-            {
-            	var bgAlpha:Number = getStyle("backgroundAlpha")
-            	if(isNaN(bgAlpha))
-            		bgAlpha = 1;
-            	graphics.beginFill(bgColor,bgAlpha);
-            	graphics.drawRect(0,0,width,height);
-            	graphics.endFill();
-            }
+			var bgAlpha:Number = getStyle("backgroundAlpha")
+			graphics.clear();
+            graphics.beginFill(bgColor,bgAlpha);
+            graphics.drawRect(0,0,width,height);
+            graphics.endFill();
+            
             if(heatBitmapData)
             {
                 graphics.beginBitmapFill(heatBitmapData);
