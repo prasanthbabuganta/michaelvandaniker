@@ -4,6 +4,9 @@ package com.michaelvandaniker.capabilities
 	{
 		private static var hasDeterminedDebugStatus:Boolean = false;
 		
+		/**
+		 * todo do this
+		 */
 		public static function get isDebug():Boolean
 		{
 			if(!hasDeterminedDebugStatus)

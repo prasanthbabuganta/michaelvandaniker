@@ -3,6 +3,8 @@
  */
 package com.michaelvandaniker.visualization
 {
+	import mx.collections.ArrayCollection;
+	
 	[Bindable]
 	public class ComparisonItem
 	{
@@ -21,6 +23,11 @@ package com.michaelvandaniker.visualization
 		 * ComparisonMatrix, this value will be the correlation coefficent.
 		 */
 		public var comparisonValue:Number;
+		
+		/**
+		 * The dataProvider of the ComparisonMatrix that created this ComparisonItem.
+		 */
+		public var dataProvider:ArrayCollection;
 		
 		public function toString():String
 		{

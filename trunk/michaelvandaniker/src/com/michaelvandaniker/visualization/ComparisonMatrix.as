@@ -370,13 +370,28 @@ package com.michaelvandaniker.visualization
 		/**
 		 * An ArrayCollection of Objects the ComparisonMatrix should operate on.
 		 */
-		public function set dataProvider(value:ArrayCollection):void
+		public function set dataProvider(value:Object):void
 		{
-			if(value != _dataProvider)
+			var collection:ArrayCollection;
+			if(value is ArrayCollection)
+			{
+				collection = value as ArrayCollection;
+			}
+			else if(value is Array)
+			{
+				if(_dataProvider)
+				{
+					if(_dataProvider.source == value)
+						return;
+				}
+				collection = new ArrayCollection(value as Array);
+			}
+			
+			if(collection != _dataProvider)
 			{
 				if(_dataProvider)
 					_dataProvider.removeEventListener(CollectionEvent.COLLECTION_CHANGE,handleCollectionChange);
-				_dataProvider = value;
+				_dataProvider = collection;
 				if(_dataProvider)
 					_dataProvider.addEventListener(CollectionEvent.COLLECTION_CHANGE,handleCollectionChange);
 				comparisonsDirty = true;
@@ -385,7 +400,7 @@ package com.michaelvandaniker.visualization
 				dispatchEvent(new Event("dataProviderChange"));
 			}
 		}
-		public function get dataProvider():ArrayCollection
+		public function get dataProvider():Object
 		{
 			return _dataProvider;
 		}
@@ -406,7 +421,7 @@ package com.michaelvandaniker.visualization
 		 * Evaluates the correlation coefficent between the xField and yField properties
 		 * on the Objects in the collection.
 		 */
-		protected function correlationCoefficent(collection:ArrayCollection, xField:String, yField:String):Number
+		public static function correlationCoefficent(collection:ArrayCollection, xField:String, yField:String):Number
 		{
 			var len:Number = collection.length;
 			var xTotal:Number = 0;
@@ -428,6 +443,11 @@ package com.michaelvandaniker.visualization
 			var bottomLeft:Number = Math.sqrt( (len * xSquaredTotal) - Math.pow(xTotal,2) );
 			var bottomRight:Number = Math.sqrt( (len * ySquaredTotal) - Math.pow(yTotal,2) );
 			return top/(bottomLeft * bottomRight);
+		}
+		
+		public static function numberOfOutliers(collection:ArrayCollection, xField:String, yField:String):Number
+		{
+			return 5;
 		}
 		
 		override protected function commitProperties():void
@@ -514,6 +534,7 @@ package com.michaelvandaniker.visualization
 						item.xField = fields[a];
 						item.yField = fields[b];
 						item.comparisonValue = comparisonFunction.apply(this,[dataProvider,item.xField,item.yField]);
+						item.dataProvider = _dataProvider;
 						_comparisonItems.push(item);
 						index++;
 					}
@@ -693,7 +714,7 @@ package com.michaelvandaniker.visualization
 		 */
 		protected function handleCellClick(event:MouseEvent):void
 		{
-			var clickedCell:ComparisonMatrixCell = event.currentTarget as ComparisonMatrixCell;
+			var clickedCell:IComparisonRenderer = event.currentTarget as IComparisonRenderer;
 			selectedItem = clickedCell.comparisonItem;
 		}
 	}
