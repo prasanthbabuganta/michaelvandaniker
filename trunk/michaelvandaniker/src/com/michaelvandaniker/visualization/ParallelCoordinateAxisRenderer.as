@@ -23,25 +23,38 @@ package com.michaelvandaniker.visualization
 			super();
 		}
 		
-		[Bindable(event="axisChange")]
-		/**
-		 * The axis this renderer should display
-		 */
-		public function set axis(value:ParallelCoordinateAxis):void
+		[Bindable(event="fieldNameChange")]
+		public function set fieldName(value:String):void
 		{
-			if(value != _axis)
+			if(value != _fieldName)
 			{
-				_axis = value;
-				invalidateSize();
+				_fieldName = value;
 				invalidateDisplayList();
-				dispatchEvent(new Event("axisChange"));
+				dispatchEvent(new Event("fieldNameChange"));
 			}
 		}
-		public function get axis():ParallelCoordinateAxis
+		public function get fieldName():String
 		{
-			return _axis;
+			return _fieldName;
 		}
-		private var _axis:ParallelCoordinateAxis;
+		private var _fieldName:String;
+		
+		[Bindable(event="labelChange")]
+		public function set label(value:String):void
+		{
+			if(value != _label)
+			{
+				_label = value;
+				invalidateSize();
+				invalidateDisplayList();
+				dispatchEvent(new Event("labelChange"));
+			}
+		}
+		public function get label():String
+		{
+			return _label;
+		}
+		private var _label:String;
 
 		public function get axisOffsetLeft():Number
 		{
@@ -83,8 +96,7 @@ package com.michaelvandaniker.visualization
 			super.measure();
 			if(textField)
 			{
-				if(axis)
-					textField.text = axis.label;
+				textField.text = label;
 				var textLineMetrics:TextLineMetrics = textField.getLineMetrics(0);
 				textField.setActualSize(textLineMetrics.width + 6,textLineMetrics.height + 2);
 				measuredWidth = textLineMetrics.width + 6;
@@ -99,21 +111,14 @@ package com.michaelvandaniker.visualization
 		override protected function updateDisplayList(unscaledWidth:Number, unscaledHeight:Number):void
 		{
 			super.updateDisplayList(unscaledWidth,unscaledHeight);
-			this.graphics.clear();
-			if(!axis)
-			{
-				textField.text = "";
-			}
-			else
-			{
-				textField.text = axis.label;
-				textField.move(0,0);
+			textField.text = label;
+			textField.move(0,0);
 				
-				var halfTextWidth:Number = textField.width / 2;
-				graphics.lineStyle(1,0);
-				graphics.moveTo(halfTextWidth,textField.height + 5);
-				graphics.lineTo(halfTextWidth,height);
-			}
+			var halfTextWidth:Number = textField.width / 2;
+			graphics.clear();
+			graphics.lineStyle(1,0);
+			graphics.moveTo(halfTextWidth,textField.height + 5);
+			graphics.lineTo(halfTextWidth,height);
 		}
 	}
 }
