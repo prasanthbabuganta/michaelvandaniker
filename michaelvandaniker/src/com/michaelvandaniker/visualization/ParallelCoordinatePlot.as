@@ -1,13 +1,18 @@
 package com.michaelvandaniker.visualization
 {
+	import flash.display.BitmapData;
 	import flash.display.DisplayObject;
+	import flash.display.Graphics;
+	import flash.display.Shape;
 	import flash.events.Event;
+	import flash.events.MouseEvent;
+	import flash.geom.Rectangle;
 	
 	import mx.collections.ArrayCollection;
-	import mx.core.ClassFactory;
-	import mx.core.IFactory;
 	import mx.core.UIComponent;
 	import mx.events.CollectionEvent;
+	import mx.graphics.IStroke;
+	import mx.graphics.Stroke;
 
 	/**
 	 * A parallel coordinate plot.
@@ -16,30 +21,53 @@ package com.michaelvandaniker.visualization
 	 */
 	public class ParallelCoordinatePlot extends UIComponent
 	{
+		public function ParallelCoordinatePlot()
+		{
+			super();
+			itemUpStroke = new Stroke(0xff,1);
+			itemOverStroke = new Stroke(0xff0000,3,.5);
+			itemSelectedStroke = new Stroke(0xff0000,3);
+			addEventListener(MouseEvent.MOUSE_MOVE,handleMouseMove);
+			addEventListener(MouseEvent.CLICK,handleMouseClick);
+		}
+		
 		/**
 		 * A UIComponent to hold the axis renderers
 		 */
 		protected var axesContainer:UIComponent;
 		
 		/**
-		 * A UIComponent to hold the item renderers
+		 * A BitmapData that PCP lines that are in the default "up" state will be drawn to.
 		 */
-		protected var itemRendererContainer:UIComponent;
+		protected var upBitmapData:BitmapData;
 		
 		/**
-		 * The ParallelCoordinateItems extracted from the dataProvider
+		 * A BitmapData that PCP lines that are rolled over will be drawn to.
 		 */
-		protected var parallelCoordinateItems:Array = [];
+		protected var overBitmapData:BitmapData;
 		
 		/**
-		 * The renders for each item in the dataProvider
+		 * A BitmapData that PCP lines that are selected will be drawn to.
 		 */
-		protected var itemRenderers:Array = [];
+		protected var selectedBitmapData:BitmapData;
+
+		/**
+		 * This BitmapData is used for hit detection. Each distinct line drawn on the
+		 * Parallel Coordinate Plot is drawn in a different color in this BitmapData.
+		 * By mapping the color under the mouse in this BitmapData, we can determine
+		 * which line the mouse is over.   
+		 */
+		protected var hitTestBitmapData:BitmapData;
+		
+		/**
+		 * An array of Objects extracted from the dataProvider
+		 */
+		protected var items:Array = [];
 		
 		/**
 		 * A flag indicating that the axes renderers need to be recreated
 		 */
-		protected var axesRenderersDirty:Boolean = true;
+		protected var axisRenderersDirty:Boolean = true;
 		
 		/**
 		 * A flag indicating that the dataProvider has changed
@@ -47,35 +75,74 @@ package com.michaelvandaniker.visualization
 		protected var dataProviderDirty:Boolean = true;
 		
 		/**
-		 * A flag indicating that the itemRenderer factory has changed
+		 * The previous value of the width property
 		 */
-		protected var itemRendererFactoryDirty:Boolean = true;
+		protected var oldWidth:Number;
 		
-		public function ParallelCoordinatePlot()
-		{
-			super();
-		}
-		
-		[Bindable(event="itemRendererChange")]
 		/**
-		 * A factory used to create renderers for the items in the dataProvider  
+		 * The previous value of the height property
 		 */
-		public function set itemRenderer(value:IFactory):void
+		protected var oldHeight:Number;
+		
+		/**
+		 * A flag indicating that the upBitmapData needs to be updated
+		 */
+		protected var upBitmapDataDirty:Boolean = true;
+		
+		/**
+		 * A flag indicating that the overBitmapData needs to be updated
+		 */
+		protected var overBitmapDataDirty:Boolean = true;
+		
+		/**
+		 * A flag indicating that the selectedBitmapData needs to be updated
+		 */
+		protected var selectedBitmapDataDirty:Boolean = true;
+		
+		/**
+		 * A hash mapping fieldNames to the minimum value of that field within the dataProvider
+		 */
+		protected var minHash:Object = new Object();
+		
+		/**
+		 * A hash mapping fieldNames to the maximum value of that field within the dataProvider
+		 */
+		protected var maxHash:Object = new Object();
+		
+		protected var colorHash:FieldValuePairColorHash = new FieldValuePairColorHash();
+
+		protected function set rolledOverParallelCoordinateItems(value:Array):void
 		{
-			if(value != _itemRenderer)
+			var valueToAssign:Array = value == null ? [] : value;
+			if(valueToAssign.toString() != _rolledOverParallelCoordinateItems)
 			{
-				_itemRenderer = value;
-				itemRendererFactoryDirty = true;
-				invalidateProperties();
+				_rolledOverParallelCoordinateItems = valueToAssign;
+				overBitmapDataDirty = true;
 				invalidateDisplayList();
-				dispatchEvent(new Event("itemRendererChange"));
 			}
 		}
-		public function get itemRenderer():IFactory
+		protected function get rolledOverParallelCoordinateItems():Array
 		{
-			return _itemRenderer;
+			return _rolledOverParallelCoordinateItems;
 		}
-		private var _itemRenderer:IFactory = new ClassFactory(ParallelCoordinateItemRenderer);
+		private var _rolledOverParallelCoordinateItems:Array;
+		
+		[Bindable(event="selectedItemsChange")]
+		public function set selectedItems(value:Array):void
+		{
+			if(_selectedItems != value)
+			{
+				_selectedItems = value;
+				selectedBitmapDataDirty = true;
+				invalidateDisplayList();
+				dispatchEvent(new Event("selectedItemsChange"));
+			}
+		}
+		public function get selectedItems():Array
+		{
+			return _selectedItems;
+		}
+		private var _selectedItems:Array;
 		
 		[Bindable(event="axisRenderersChange")]
 		/**
@@ -98,24 +165,6 @@ package com.michaelvandaniker.visualization
 		}
 		private var _axisRenderers:Array = [];
 		
-		[Bindable(event="axesChange")]
-		/**
-		 * The axes that make up this parallel coordinate plot.
-		 */
-		public function set axes(value:Array):void
-		{
-			if(value != _axes)
-			{
-				_axes = value;
-				dispatchEvent(new Event("axesChange"));
-			}
-		}
-		public function get axes():Array
-		{
-			return _axes;
-		}
-		private var _axes:Array = [];
-		
 		[Bindable(event="dataProviderChange")]
 		/**
 		 * An ArrayCollection of Objects to render on this ParallelCoordinatePlot
@@ -131,14 +180,66 @@ package com.michaelvandaniker.visualization
 				if (_dataProvider)
 					_dataProvider.removeEventListener(CollectionEvent.COLLECTION_CHANGE, handleCollectionChange);
 				_dataProvider = value;
-	            _dataProvider.addEventListener(CollectionEvent.COLLECTION_CHANGE, handleCollectionChange);
+				if(_dataProvider)
+	            	_dataProvider.addEventListener(CollectionEvent.COLLECTION_CHANGE, handleCollectionChange);
 	            dispatchEvent(new Event("dataProviderChange"));
 	            dataProviderDirty = true;
 	            invalidateProperties();
-	            invalidateDisplayList();
+	            invalidateAllBitmapData();
 			}
         }
         private var _dataProvider:ArrayCollection;
+        
+        [Bindable(event="itemUpStrokeChange")]
+		public function set itemUpStroke(value:IStroke):void
+		{
+			if(value != _itemUpStroke)
+			{
+				_itemUpStroke = value;
+				upBitmapDataDirty = true;
+				invalidateDisplayList();
+				dispatchEvent(new Event("itemUpStrokeChange"));
+			}
+		}
+		public function get itemUpStroke():IStroke
+		{
+			return _itemUpStroke;
+		}
+		private var _itemUpStroke:IStroke;
+		
+		[Bindable(event="itemOverStrokeChange")]
+		public function set itemOverStroke(value:IStroke):void
+		{
+			if(value != _itemOverStroke)
+			{
+				_itemOverStroke = value;
+				overBitmapDataDirty = true;
+				invalidateDisplayList();
+				dispatchEvent(new Event("itemOverStrokeChange"));
+			}
+		}
+		public function get itemOverStroke():IStroke
+		{
+			return _itemOverStroke;
+		}
+		private var _itemOverStroke:IStroke;
+		
+		[Bindable(event="itemSelectedStrokeChange")]
+		public function set itemSelectedStroke(value:IStroke):void
+		{
+			if(value != _itemSelectedStroke)
+			{
+				_itemSelectedStroke = value;
+				selectedBitmapDataDirty = true;
+				invalidateDisplayList();
+				dispatchEvent(new Event("itemSelectedStrokeChange"));
+			}
+		}
+		public function get itemSelectedStroke():IStroke
+		{
+			return _itemSelectedStroke;
+		}
+		private var _itemSelectedStroke:IStroke;
         
         protected function handleCollectionChange(event:CollectionEvent):void
         {
@@ -154,18 +255,13 @@ package com.michaelvandaniker.visualization
         		axesContainer = new UIComponent();
         		addChild(axesContainer);
         	}
-        	if(!itemRendererContainer)
-        	{
-        		itemRendererContainer = new UIComponent();
-        		addChild(itemRendererContainer);
-        	}
         } 
 		
 		override protected function commitProperties():void
 		{
 			super.commitProperties();
 			// The array of axis renderers has changed. Just throw out all the old ones and regenerate.
-			if(axesRenderersDirty)
+			if(axisRenderersDirty)
 			{
 				while(axesContainer.numChildren > 0)
 				{
@@ -175,25 +271,17 @@ package com.michaelvandaniker.visualization
 				{
 					 axesContainer.addChild(DisplayObject(axisRenderer));
 				}
-				axesRenderersDirty = false;
+				axisRenderersDirty = false;
 			}
-			
-			// The itemRenderer factory has changed, so we need to throw away all the ParallelCoordinateItemRenderers
-			if(itemRendererFactoryDirty)
-			{
-				while(itemRendererContainer.numChildren > 0)
-				{
-					itemRendererContainer.removeChildAt(0);
-				}
-				itemRenderers = [];
-				itemRendererFactoryDirty = false;
-			}
-			
+						
 			if(dataProviderDirty)
 			{
+				if(dataProvider)
+					items = dataProvider.toArray();
+				
 				updateAxisExtremeValues();
-				updateParallelCoordinateItems();
-				syncItemRenderersWithCollection();
+				updateColorHash();
+				invalidateAllBitmapData();
 				dataProviderDirty = false;
 			}
 		}
@@ -203,58 +291,189 @@ package com.michaelvandaniker.visualization
 		 */
 		private function updateAxisExtremeValues():void
 		{
-			for each(var axis:ParallelCoordinateAxis in axes)
+			for each(var axisRenderer:IParallelCoordinateAxisRenderer in axisRenderers)
 			{
-				axis.computeExtremeValues(dataProvider);
+				computeExtremeValues(dataProvider,axisRenderer.fieldName);
 			}
 		}
 		
-		/**
-		 * Generate a ParallelCoordinateItems for each item in the dataProvider
-		 */ 
-		private function updateParallelCoordinateItems():void
+		private function updateColorHash():void
 		{
-			parallelCoordinateItems = [];
-			for each(var o:Object in dataProvider)
+			var currColor:int = 1;
+			colorHash.clear();
+			
+			for each(var item:Object in _dataProvider)
 			{
-				var pci:ParallelCoordinateItem = new ParallelCoordinateItem(o);
-				for each(var axis:ParallelCoordinateAxis in axes)
+				var len:int = axisRenderers.length;
+				for(var a:int = 0; a < len - 1; a++)
 				{
-					pci.computeFieldPercentage(axis.fieldName,axis.minimum,axis.maximum);
-					parallelCoordinateItems.push(pci);
+					var currAxisRenderer:IParallelCoordinateAxisRenderer = axisRenderers[a];
+					var nextAxisRenderer:IParallelCoordinateAxisRenderer = axisRenderers[a + 1];
+					
+					var currFieldName:String = currAxisRenderer.fieldName;
+					var nextFieldName:String = nextAxisRenderer.fieldName;
+					
+					if(!colorHash.contains(currFieldName, item[currFieldName], nextFieldName, item[nextFieldName]))
+					{
+						colorHash.assignColor(
+							currColor,
+							currFieldName,
+							item[currFieldName],
+							nextFieldName,
+							item[nextFieldName]);
+						currColor += 100;
+					}
 				}
-			}
-		}
-		
-		/**
-		 * Make sure there is one ParallelCoordinateItemRenderer for each ParallelCoordinateItem
-		 */
-		private function syncItemRenderersWithCollection():void
-		{
-			for(var a:int = 0; a < parallelCoordinateItems.length; a++)
-			{
-				var renderer:ParallelCoordinateItemRenderer;
-				if(itemRenderers.length >= a)
-				{
-					renderer = itemRenderer.newInstance();
-					itemRenderers.push(renderer);
-					itemRendererContainer.addChild(renderer);
-				}
-				renderer = ParallelCoordinateItemRenderer(itemRenderers[itemRenderers.length - 1]);
-				renderer.axisRenderers = axisRenderers;
-				renderer.item = ParallelCoordinateItem(parallelCoordinateItems[a]);
-			}
-			while(itemRenderers.length > parallelCoordinateItems.length)
-			{
-				itemRendererContainer.removeChild(itemRenderers.pop());
 			}
 		}
 		
 		override protected function updateDisplayList(unscaledWidth:Number, unscaledHeight:Number):void
 		{
 			super.updateDisplayList(unscaledWidth,unscaledHeight);
+
 			layoutAxisRenderers();
-			updateItemRenderers();
+			
+			if(width != oldWidth || height != oldHeight)
+			{
+				resetAllBitmapData();
+				
+				upBitmapDataDirty = true;
+				overBitmapDataDirty = true;
+				selectedBitmapDataDirty = true;
+				
+				oldWidth = width;
+				oldHeight = height;
+			}
+			
+			if(upBitmapDataDirty || overBitmapDataDirty || selectedBitmapDataDirty)
+				graphics.clear();
+			
+			if(upBitmapDataDirty)
+			{
+				updateBitmapData(upBitmapData,items,false,itemUpStroke);
+				updateBitmapData(hitTestBitmapData,items,true);
+				upBitmapDataDirty = false;
+			}
+			
+			if(overBitmapDataDirty)
+			{
+				updateBitmapData(overBitmapData,rolledOverParallelCoordinateItems,false,itemOverStroke);
+				overBitmapDataDirty = false;
+			}
+			
+			if(selectedBitmapDataDirty)
+			{
+				updateBitmapData(selectedBitmapData,selectedItems,false,itemSelectedStroke);
+				selectedBitmapDataDirty = false;
+			}
+			
+			//drawBitmapDataToGraphics(graphics,hitTestBitmapData);
+			drawBitmapDataToGraphics(graphics,upBitmapData);
+			drawBitmapDataToGraphics(graphics,overBitmapData);
+			drawBitmapDataToGraphics(graphics,selectedBitmapData);
+		}
+		
+		protected function invalidateAllBitmapData():void
+		{
+			upBitmapDataDirty = true;
+            overBitmapDataDirty = true;
+            selectedBitmapDataDirty = true;
+            invalidateDisplayList();
+		}
+		
+		/**
+		 * Disposes of the three BitmapDatas and recreates them at the current width and height of the component.
+		 */
+		protected function resetAllBitmapData():void
+		{
+			if(upBitmapData)
+				upBitmapData.dispose();
+			upBitmapData = new BitmapData(width,height,true,0);
+			
+			if(overBitmapData)
+				overBitmapData.dispose();
+			overBitmapData = new BitmapData(width,height,true,0);
+			
+			if(selectedBitmapData)
+				selectedBitmapData.dispose();
+			selectedBitmapData = new BitmapData(width,height,true,0);
+			
+			if(hitTestBitmapData)
+				hitTestBitmapData.dispose();
+			hitTestBitmapData = new BitmapData(width,height,true,0);
+		}
+		
+		protected function updateBitmapData(bitmapData:BitmapData,items:Array,useColorHash:Boolean,stroke:IStroke = null):void
+		{
+			if(!useColorHash && stroke == null)
+			{
+				trace("that's not going to fly");
+				return;
+			}
+			
+			var graphicsHolder:Shape = new Shape();
+			
+			if(!useColorHash)
+				stroke.apply(graphicsHolder.graphics);
+				
+			for each(var item:Object in items)
+			{
+				// For each sequential pair of axes render this item as line between them
+				// based on the field percentages for the two axes. 
+				var len:int = axisRenderers.length;
+				for(var a:int = 0; a < len - 1; a++)
+				{
+					var currAxisRenderer:IParallelCoordinateAxisRenderer = axisRenderers[a];
+					var nextAxisRenderer:IParallelCoordinateAxisRenderer = axisRenderers[a + 1];
+					
+					var currAxisHeight:Number = currAxisRenderer.height - 
+						currAxisRenderer.axisOffsetTop - currAxisRenderer.axisOffsetBottom;
+						
+					var nextAxisHeight:Number = nextAxisRenderer.height - 
+						nextAxisRenderer.axisOffsetTop - nextAxisRenderer.axisOffsetBottom;
+					
+					var x1:Number = currAxisRenderer.x + currAxisRenderer.width - currAxisRenderer.axisOffsetRight;
+					var x2:Number = nextAxisRenderer.x + nextAxisRenderer.axisOffsetLeft;
+					
+					var topLeft:Number = currAxisRenderer.y + currAxisRenderer.axisOffsetTop;
+					var topRight:Number = nextAxisRenderer.y + nextAxisRenderer.axisOffsetTop;
+					
+					var currFieldName:String = currAxisRenderer.fieldName;
+					var nextFieldName:String = nextAxisRenderer.fieldName;
+					var leftPercent:Number = getFieldPercentage(currFieldName,item[currFieldName]);
+					var rightPercent:Number = getFieldPercentage(nextFieldName,item[nextFieldName]);
+					
+					var y1:Number = topLeft + leftPercent * currAxisHeight;
+					var y2:Number = topRight + rightPercent * nextAxisHeight;
+					
+					if(useColorHash)
+					{
+						var color:Number = colorHash.getColorForKey(
+							currFieldName,
+							item[currFieldName],
+							nextFieldName,
+							item[nextFieldName]);
+							
+						graphicsHolder.graphics.lineStyle(5,color);
+					}
+					graphicsHolder.graphics.moveTo(x1,y1);
+					graphicsHolder.graphics.lineTo(x2,y2);
+				}
+			}
+			bitmapData.fillRect(new Rectangle(0,0,width,height),0);
+			bitmapData.draw(graphicsHolder);
+		}
+		
+		protected function getFieldPercentage(fieldName:String,value:Number):Number
+		{
+			return 1 - (maxHash[fieldName] - value) / (maxHash[fieldName] - minHash[fieldName]);
+		}
+		
+		protected function drawBitmapDataToGraphics(g:Graphics,bitmapData:BitmapData):void
+		{
+			g.beginBitmapFill(bitmapData);
+			g.drawRect(0,0,bitmapData.width,bitmapData.height);
+			g.endFill();
 		}
 		
 		/**
@@ -293,15 +512,103 @@ package com.michaelvandaniker.visualization
 			}
 		}
 		
-		/**
-		 * Trigger a redraw of the item renderers by setting their size
-		 */
-		protected function updateItemRenderers():void
+		protected function computeExtremeValues(collection:ArrayCollection,fieldName:String):void
 		{
-			for each(var renderer:ParallelCoordinateItemRenderer in itemRenderers)
+			if(collection && collection.length > 0)
 			{
-				renderer.setActualSize(width,height);
+				var len:int = collection.length;
+				var min:Number = collection[0][fieldName];
+				var max:Number = collection[0][fieldName];
+				for(var a:int = 1; a < len; a++)
+				{
+					var value:Number = collection[a][fieldName];
+					min = min > value ? value : min; 
+					max = max < value ? value : max;
+				}
+				minHash[fieldName] = min;
+				maxHash[fieldName] = max;
+			}
+			else
+			{
+				minHash[fieldName] = NaN;
+				maxHash[fieldName] = NaN;
 			}
 		}
+		
+		protected function handleMouseMove(event:MouseEvent):void
+		{
+			if(!hitTestBitmapData)
+				return;
+				
+			var colorUnderCursor:int = hitTestBitmapData.getPixel(event.localX,event.localY);
+			rolledOverParallelCoordinateItems = colorHash.getItemsWithColor(items,colorUnderCursor);
+		}
+		
+		protected function handleMouseClick(event:MouseEvent):void
+		{
+			if(!hitTestBitmapData)
+				return;
+				
+			var colorUnderCursor:int = hitTestBitmapData.getPixel(event.localX,event.localY);
+			selectedItems = colorHash.getItemsWithColor(items,colorUnderCursor);
+		}
+	}
+}
+	
+internal class FieldValuePairColorHash
+{
+	private var colorToKeyHash:Object = new Object();
+	
+	private var keyToColorHash:Object = new Object();
+	
+	public function clear():void
+	{
+		colorToKeyHash = new Object();
+		keyToColorHash = new Object();
+	}
+	
+	public function contains(field1:String,value1:Number,field2:String,value2:Number):Boolean
+	{
+		var key:String = makeKey(field1,value1,field2,value2);
+		return colorToKeyHash[key] != null;
+	}
+	
+	public function assignColor(color:int,field1:String,value1:Number,field2:String,value2:Number):void
+	{
+		var key:String = makeKey(field1,value1,field2,value2);
+		colorToKeyHash[color] = key;
+		keyToColorHash[key] = color;
+	}
+	
+	public function getColorForKey(field1:String,value1:Number,field2:String,value2:Number):int
+	{
+		return keyToColorHash[makeKey(field1,value1,field2,value2)];
+	}
+	
+	public function getItemsWithColor(sourceItems:Array,color:int):Array
+	{
+		var fpvKey:String = colorToKeyHash[color];
+		
+		if(fpvKey == null)
+			return [];
+		
+		var splitKey:Array = fpvKey.split("_");
+		var field1:String = splitKey[0];
+		var value1:Number = parseFloat(splitKey[1]);
+		var field2:String = splitKey[2];
+		var value2:Number = parseFloat(splitKey[3]);
+		
+		var toReturn:Array = new Array();
+		for each(var item:Object in sourceItems)
+		{
+			if(item[field1] == value1 && item[field2] == value2)
+				toReturn.push(item);
+		}
+		return toReturn;
+	}
+	
+	private function makeKey(field1:String,value1:Number,field2:String,value2:Number):String
+	{
+		return field1+"_"+value1+"_"+field2+"_"+value2;
 	}
 }

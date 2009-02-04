@@ -7,15 +7,15 @@ package com.michaelvandaniker.visualization
 	 */
 	public interface IParallelCoordinateAxisRenderer extends IUIComponent
 	{
-		/**
-		 * The ParallelCoordinateAxis this axis renderer should display.
-		 */
-		function get axis():ParallelCoordinateAxis;
-		function set axis(value:ParallelCoordinateAxis):void;
+		function get fieldName():String;
+		function set fieldName(value:String):void;
 		
+		function get label():String;
+		function set label(value:String):void;
+
 		// In order to determine where the ParallelCoordinateItemRenderer should draw
 		// lines, it needs to know the location of the actual axis within the axis renderer.
-		// The following four getters allow the implementor to expose this information. 
+		// The following four getters allow the implementor to expose this information.
 		
 		/**
 		 * The distance from the left side of the axis renderer to what 

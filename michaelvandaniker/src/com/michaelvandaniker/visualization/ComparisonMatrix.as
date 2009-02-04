@@ -445,10 +445,10 @@ package com.michaelvandaniker.visualization
 			return top/(bottomLeft * bottomRight);
 		}
 		
-		public static function numberOfOutliers(collection:ArrayCollection, xField:String, yField:String):Number
+		/*public static function numberOfOutliers(collection:ArrayCollection, xField:String, yField:String):Number
 		{
 			return 5;
-		}
+		}*/
 		
 		override protected function commitProperties():void
 		{
